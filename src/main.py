@@ -162,13 +162,5 @@ if __name__ == '__main__':
     ## train
     # set federated optim algorithm
     ServerExecute = Server(dataset, model, args, client_selection, fed_algo, files)
-    server = Server(
-    global_model=model,
-    train_loaders=data.train_loaders,          # list[DataLoader]
-    val_loaders=getattr(data, "val_loaders", None),
-    test_loader=getattr(data, "test_loader", None),
-    train_sizes=getattr(data, "train_sizes", None),
-    domain_assignment=getattr(data, "domain_assignment", None),
-    args=args
-)
+   
     ServerExecute.train()
