@@ -22,8 +22,7 @@ def get_args():
     parser.add_argument('--method', type=str, default='Random', help='client selection',
                         choices=ALL_METHODS)
 
-    parser.add_argument('--dataset', type=str, default='FederatedEMNIST',
-    choices=['FederatedEMNIST', 'PathMNISTDomain'], help='Federated dataset')
+  
 
     parser.add_argument('--domains', type=int, default=4, help='number of domains for PathMNISTDomain')
     parser.add_argument('--num_total_clients', type=int, default=10, help='total number of clients for PathMNISTDomain')
