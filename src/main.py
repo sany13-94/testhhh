@@ -41,6 +41,9 @@ def load_data(args):
         return CelebADataset(args.data_dir, args)
     elif args.dataset == 'PartitionedCIFAR10':
         return PartitionedCIFAR10Dataset(args.data_dir, args)
+    elif args.dataset == 'PathMNISTDomain':
+        from src.data.pathmnist_domains import PathMNISTDomainDataset
+        return PathMNISTDomainDataset(args)
 
 
 def create_model(args):
@@ -60,6 +63,10 @@ def create_model(args):
         model = ModelCNNCeleba()
     elif args.dataset == 'PartitionedCIFAR10':
         model = CNN_CIFAR_dropout()
+    elif args.dataset == 'PathMNISTDomain':
+      # pick a 3-channel model you already have
+      model = CNN_CIFAR_dropout()  # if this one expects 3 channels
+
 
     model = model.to(args.device)
     if args.parallel:
@@ -156,4 +163,13 @@ if __name__ == '__main__':
     ## train
     # set federated optim algorithm
     ServerExecute = Server(dataset, model, args, client_selection, fed_algo, files)
+    server = Server(
+    global_model=model,
+    train_loaders=data.train_loaders,          # list[DataLoader]
+    val_loaders=getattr(data, "val_loaders", None),
+    test_loader=getattr(data, "test_loader", None),
+    train_sizes=getattr(data, "train_sizes", None),
+    domain_assignment=getattr(data, "domain_assignment", None),
+    args=args
+)
     ServerExecute.train()

@@ -25,6 +25,7 @@ class Server(object):
             fed_algo: FL algorithm for aggregation at server
             results: results for recording
         """
+        
         self.train_data = data['train']['data']
         self.train_sizes = data['train']['data_sizes']
         self.test_data = data['test']['data']

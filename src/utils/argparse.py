@@ -18,6 +18,14 @@ def get_args():
     parser.add_argument('--model', type=str, default='CNN', help='model', choices=['BLSTM','CNN','ResNet'])
     parser.add_argument('--method', type=str, default='Random', help='client selection',
                         choices=ALL_METHODS)
+
+    parser.add_argument('--dataset', type=str, default='FederatedEMNIST',
+    choices=['FederatedEMNIST', 'PathMNISTDomain'], help='Federated dataset')
+
+    parser.add_argument('--domains', type=int, default=4, help='number of domains for PathMNISTDomain')
+    parser.add_argument('--num_total_clients', type=int, default=10, help='total number of clients for PathMNISTDomain')
+    parser.add_argument('--val_ratio', type=float, default=0.1)
+
     parser.add_argument('--fed_algo', type=str, default='FedAvg', help='Federated algorithm for aggregation',
                         choices=['FedAvg', 'FedAdam'])
     
