@@ -5,6 +5,8 @@ from .celeba import CelebADataset
 from .partitioned_cifar10 import PartitionedCIFAR10Dataset
 from .federated_emnist_iid import FederatedEMNISTDatasetIID
 from .federated_emnist_noniid import FederatedEMNISTDataset_nonIID
+from .pathmnist_domains import PathMNISTDomainDataset
+
 
 __all__ = ['FederatedEMNISTDataset', 'FederatedEMNISTDatasetIID', 'FederatedEMNISTDataset_nonIID',
-            'FederatedCIFAR100Dataset', 'PartitionedCIFAR10Dataset', 'RedditDataset', 'PathMNISTDomain']
+            'FederatedCIFAR100Dataset', 'PartitionedCIFAR10Dataset', 'RedditDataset', 'PathMNISTDomainDataset']
