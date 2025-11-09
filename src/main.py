@@ -42,7 +42,7 @@ def load_data(args):
     elif args.dataset == 'PartitionedCIFAR10':
         return PartitionedCIFAR10Dataset(args.data_dir, args)
     elif args.dataset == 'PathMNISTDomain':
-        from src.data.pathmnist_domains import PathMNISTDomainDataset
+        from pathmnist_domains import PathMNISTDomainDataset
         return PathMNISTDomainDataset(args)
 
 
