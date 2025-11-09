@@ -9,7 +9,10 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu_id', type=str, default='0', help='gpu cuda index')
     parser.add_argument('--dataset', type=str, default='FederatedEMNIST', help='dataset',
-                        choices=['Reddit','MNISTDataset','CIFAR','FederatedEMNIST','FedCIFAR100','CelebA', 'PartitionedCIFAR10', 'FederatedEMNIST_IID', 'FederatedEMNIST_nonIID'])
+                        choices=['Reddit','MNISTDataset','CIFAR','FederatedEMNIST','FedCIFAR100','CelebA', 'PartitionedCIFAR10', 'FederatedEMNIST_IID', 'FederatedEMNIST_nonIID'
+                        ,
+        'PathMNISTDomain'    # ← add this one only
+                        ])
 
     parser.add_argument('--iid', type=int, default=1,
                         help='Default set to IID. Set to 0 for non-IID.')
