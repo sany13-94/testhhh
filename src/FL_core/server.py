@@ -254,10 +254,7 @@ class Server(object):
                 client_indices = np.random.choice(client_indices, self.num_available, replace=False)
                 self.save_selected_clients(round_idx, client_indices)
             
-            # these clients will actually participate this round
-            self.participation_counts[client_indices] += 1
-            self.participation_history.append((round_idx, list(client_indices)))
-
+            
             # set client selection methods
             # initialize selection methods by setting given global model
             if self.args.method in NEED_INIT_METHOD:
@@ -304,6 +301,10 @@ class Server(object):
                 client_indices = np.take(client_indices, selected_client_indices).tolist()
                 local_losses = np.take(local_losses, selected_client_indices)
                 accuracy = np.take(accuracy, selected_client_indices)
+            
+            # these clients will actually participate this round
+            self.participation_counts[client_indices] += 1
+            self.participation_history.append((round_idx, list(client_indices)))
 
 
             ## CHECK and SAVE current updates
