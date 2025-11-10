@@ -32,6 +32,13 @@ class Server(object):
         self.test_sizes = data['test']['data_sizes']
         self.test_clients = data['test']['data_sizes'].keys()
 
+
+        # We used the dataset adapter to store *validation* sets in the 'test' slot on purpose.
+        self.val_data = data['test']['data']           # dict: cid -> Dataset (client-specific validation)
+        self.num_clients = len(self.train_data)
+
+     
+
         self.device = args.device
         self.args = args
         self.global_model = init_model
@@ -69,6 +76,62 @@ class Server(object):
 
         if self.args.method in LOSS_THRESHOLD:
             self.ltr = 0.0
+
+        # PATCH: evaluate global model on each client's validation set and average
+        def evaluate_on_client_validation(self, clients=None):
+          """
+          Returns:
+          avg_acc: float
+          per_client: list of (cid, acc, loss)
+          """
+          if clients is None:
+            clients = list(self.train_data.keys())
+
+          per_client = []
+          for cid in clients:
+            val_ds = self.val_data[cid]  # Dataset (no DataLoader needed; trainer.test builds it)
+            res = self.trainer.test(self.global_model, val_ds)  # {'loss': ..., 'acc': ...}
+            per_client.append((cid, float(res['acc']), float(res['loss'])))
+
+            # Optional Excel logging (guarded)
+            try:
+              from pathlib import Path
+              import pandas as pd
+
+              xls_path = Path("/mnt/data/client_valid_accuracy.xlsx")
+              # load records
+              try:
+                xls = pd.ExcelFile(xls_path)
+                df_records = pd.read_excel(xls, sheet_name="records")
+              except Exception:
+                df_records = pd.DataFrame(columns=["round","client_id","domain_id","val_loss","val_acc"])
+
+              # append one row
+              did = self.domain_map[cid] if self.domain_map is not None else -1
+              df_records = pd.concat([df_records, pd.DataFrame([{
+                "round": getattr(self, "round_idx", -1),
+                "client_id": cid,
+                "domain_id": did,
+                "val_loss": float(res['loss']),
+                "val_acc": float(res['acc']),
+            }])], ignore_index=True)
+
+              # recompute averages sheet
+              if not df_records.empty and "val_acc" in df_records:
+                df_averages = (df_records.groupby("client_id", as_index=False)["val_acc"]
+                               .agg(avg_val_acc="mean", count="size")
+                               .sort_values("client_id"))
+              else:
+                df_averages = pd.DataFrame(columns=["client_id","avg_val_acc","count"])
+
+              with pd.ExcelWriter(xls_path, engine="openpyxl", mode="w") as w:
+                df_records.to_excel(w, index=False, sheet_name="records")
+                df_averages.to_excel(w, index=False, sheet_name="averages")
+            except Exception:
+              pass  # logging is optional; don't block training
+
+          avg_acc = sum(a for _, a, _ in per_client) / max(1, len(per_client))
+          return avg_acc, per_client
 
 
     def _init_clients(self, init_model):
@@ -174,7 +237,7 @@ class Server(object):
             # update aggregated model to global model
             self.global_model.load_state_dict(global_model_params)
 
-
+            
             ## TEST
             if round_idx % self.args.test_freq == 0:
                 self.global_model.eval()
@@ -185,6 +248,18 @@ class Server(object):
 
                 # test on test dataset
                 self.test(len(self.test_clients), phase='Test')
+            
+            # PATCH: remember round index for logging
+
+            # Replace the old "global test" with per-client validation averaging:
+            avg_val_acc, per_client_vals = self.evaluate_on_client_validation()
+
+            # You can print/log this:
+            print(f"[Round {round_idx}] Avg client-val accuracy: {avg_val_acc:.4f}")
+            # If you use wandb:
+            if getattr(self.args, "wandb", False):
+              import wandb
+              wandb.log({"avg_client_val_acc": avg_val_acc, "round": round_idx})
 
             del local_models, local_losses, accuracy
 
