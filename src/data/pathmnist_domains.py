@@ -135,8 +135,7 @@ def build_pathmnist_emnist_style(
     ds_test  = LazyPathMNIST(split='test')
     aug = build_augmentation_transform()
 
-    ds_train = _trim_to_multiple(ds_train, 32)
-    ds_test   = _trim_to_multiple(ds_test,  32)
+ 
 
     num_train_clients = k - 1  # last client will be built from test split (domain 3)
 
