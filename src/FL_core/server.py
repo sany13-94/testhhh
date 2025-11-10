@@ -6,11 +6,11 @@ import numpy as np
 import sys
 import multiprocessing as mp
 import random
-
+import pandas as pd
 from .client import Client
 from .client_selection.config import *
-
-
+from pathlib import Path
+import matplotlib.pyplot as plt
 
 class Server(object):
     def __init__(self, data, init_model, args, selection, fed_algo, files):
@@ -82,6 +82,76 @@ class Server(object):
 
         # PATCH: evaluate global model on each client's validation set and average
     
+
+    def save_participation_report(self, title: str = "Pow-d"):
+      """
+      Saves a bar chart and a CSV of client participation counts.
+      """
+      colors = None
+      if getattr(self, "domain_map", None) is not None:
+        doms = np.array(self.domain_map)
+        # simple mapping 0/1/2/3 -> distinct colors
+        cmap = {0: "#4e79a7", 1: "#f28e2b", 2: "#e15759", 3: "#76b7b2"}
+        colors = [cmap.get(int(d), "#999999") for d in doms]
+        out_dir = Path("/results")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        png_path = out_dir / f"participation_{title.replace(' ', '_')}.png"
+        csv_path = out_dir / f"participation_{title.replace(' ', '_')}.csv"
+
+        counts = self.participation_counts.astype(int)
+        n_clients = len(counts)
+        participated = (counts > 0).sum()
+        avg = counts.mean()
+        std = counts.std()
+
+        # ---- CSV (round-by-round and totals) ----
+        df_total = pd.DataFrame({
+        "client_id": list(range(n_clients)),
+        "participations": counts
+        })
+        # (optional) history long-form
+        rows = []
+        for r, ids in self.participation_history:
+          for cid in ids:
+            rows.append({"round": r, "client_id": cid})
+        df_hist = pd.DataFrame(rows)
+
+        with pd.ExcelWriter(out_dir / f"participation_{title.replace(' ', '_')}.xlsx") as w:
+          df_total.to_excel(w, index=False, sheet_name="totals")
+          if not df_hist.empty:
+            df_hist.to_excel(w, index=False, sheet_name="history")
+
+        # ---- Plot ----
+        plt.figure(figsize=(16, 5))
+        x = np.arange(n_clients)
+        plt.bar(x, counts)
+        plt.title(f"Client Participation Distribution - {title}", fontsize=16, pad=12)
+        plt.xlabel("Client ID")
+        plt.ylabel("Number of Participations")
+        plt.xticks(x, [f"Client {i}" for i in x], rotation=30, ha="right")
+
+        # summary box
+        text = (
+        f"Total Clients: {n_clients}\n"
+        f"Participated: {participated} ({participated/n_clients*100:.1f}%)\n"
+        f"Avg Participation: {avg:.2f} ± {std:.2f}"
+    )
+        plt.gca().text(
+        0.98, 0.97, text,
+        transform=plt.gca().transAxes,
+        fontsize=11,
+        va="top", ha="right",
+        bbox=dict(boxstyle="round,pad=0.4", fc="#f8edd1", ec="#b9a16b", alpha=0.9)
+    )
+        plt.tight_layout()
+        plt.savefig(png_path, dpi=200)
+        plt.close()
+
+        # also save CSV for quick diffs
+        df_total.to_csv(csv_path, index=False)
+
+        print(f"[Participation] saved: {png_path}")
+
     def evaluate_on_client_validation(self, clients=None):
           """
           Returns:
@@ -102,7 +172,7 @@ class Server(object):
               from pathlib import Path
               import pandas as pd
 
-              xls_path = Path("/mnt/data/client_valid_accuracy.xlsx")
+              xls_path = Path("/results/client_valid_accuracy.xlsx")
               # load records
               try:
                 xls = pd.ExcelFile(xls_path)
@@ -153,6 +223,9 @@ class Server(object):
                        deepcopy(init_model), self.args)
             self.client_list.append(c)
 
+
+    #visualization clients participants
+
     def train(self):
         """
         FL training
@@ -167,11 +240,16 @@ class Server(object):
 
             # set clients
             client_indices = [*range(self.total_num_client)]
+            
             if self.num_available is not None:
                 print(f'> available clients {self.num_available}/{len(client_indices)}')
                 np.random.seed(self.args.seed + round_idx)
                 client_indices = np.random.choice(client_indices, self.num_available, replace=False)
                 self.save_selected_clients(round_idx, client_indices)
+            
+            # these clients will actually participate this round
+            self.participation_counts[client_indices] += 1
+            self.participation_history.append((round_idx, list(client_indices)))
 
             # set client selection methods
             # initialize selection methods by setting given global model
@@ -267,9 +345,12 @@ class Server(object):
 
             del local_models, local_losses, accuracy
 
+        self.save_participation_report(title=self.args.method)
+
         for k in self.files:
             if self.files[k] is not None:
                 self.files[k].close()
+
 
 
 
