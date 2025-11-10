@@ -280,7 +280,7 @@ class Server(object):
 
 
             ## CLIENT UPDATE (TRAINING)
-            local_losses, accuracy, local_metrics = self.train_clients(client_indices)
+            local_losses, accuracy, local_metrics = self.train_clients(client_indices,round_idx)
 
 
             ## CLIENT SELECTION
@@ -389,7 +389,7 @@ class Server(object):
         result = client.test(self.global_model, self.test_on_training_data)
         return result
 
-    def train_clients(self, client_indices):
+    def train_clients(self, client_indices,round_idx):
         """
         train multiple clients (w. or w.o. multi processing)
         ---

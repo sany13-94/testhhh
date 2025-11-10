@@ -45,7 +45,33 @@ def get_args():
     parser.add_argument('--alpha1', type=float, default=0.75, help='alpha1 for AFL')
     parser.add_argument('--alpha2', type=float, default=1, help='alpha2 for AFL')
     parser.add_argument('--alpha3', type=float, default=0.1, help='alpha3 for AFL')
+    # ---- Straggler Simulation Arguments ----
+    parser.add_argument(
+    '--simulate_stragglers', 
+    type=str, 
+    default='0,1',
+    help='Comma-separated client IDs to simulate as stragglers (e.g., "0,1,2").'
+)
+    parser.add_argument(
+    '--delay_base_sec', 
+    type=float, 
+    default=10.0,
+    help='Base delay time (in seconds) for straggler clients.'
+)
 
+    parser.add_argument(
+    '--delay_jitter_sec', 
+    type=float, 
+    default=3.0,
+    help='Random jitter (in seconds) added to base delay for stragglers.'
+)
+
+    parser.add_argument(
+    '--delay_prob', 
+    type=float, 
+    default=1.0,
+    help='Probability [0,1] that a straggler actually delays in a round.'
+)
     # parser.add_argument('--power_limit', type=int, default=None,
     #                 help='Power limit for each client')
     # parser.add_argument('--bandwidth_limit', type=int, default=None,
