@@ -63,7 +63,10 @@ class Trainer:
         """
         #dataloader = DataLoader(data, **self.loader_kwargs)
         # 1) in train()
-        dataloader = DataLoader(data, **self._dl_kwargs(drop_last=True))
+        kw = dict(self.loader_kwargs)   # copy so we don't mutate the original
+        kw.pop('drop_last', None)       # remove any existing value
+        kw['drop_last'] = True          # force dropping incomplete last batch
+        dataloader = DataLoader(data, **kw)
 
         self.model = self.model.to(self.device)
 
@@ -134,7 +137,10 @@ class Trainer:
         #dataloader = DataLoader(data, **self.loader_kwargs)
 
         # 2) in train_E0()
-        dataloader = DataLoader(data,**self._dl_kwargs(drop_last=True))
+        kw = dict(self.loader_kwargs)   # copy so we don't mutate the original
+        kw.pop('drop_last', None)       # remove any existing value
+        kw['drop_last'] = True          # force dropping incomplete last batch
+        dataloader = DataLoader(data, **kw)
 
         self.model = self.model.to(self.device)
         self.model.train()
@@ -189,7 +195,10 @@ class Trainer:
         #dataloader = DataLoader(data, **self.loader_kwargs)
 
         # 3) in test()
-        dataloader = DataLoader(data,**self._dl_kwargs(drop_last=True))
+        kw = dict(self.loader_kwargs)   # copy so we don't mutate the original
+        kw.pop('drop_last', None)       # remove any existing value
+        kw['drop_last'] = True          # force dropping incomplete last batch
+        dataloader = DataLoader(data, **kw)
         model = model.to(self.device)
         model.eval()
 
