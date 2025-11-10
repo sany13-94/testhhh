@@ -78,7 +78,8 @@ class Server(object):
             self.ltr = 0.0
 
         # PATCH: evaluate global model on each client's validation set and average
-        def evaluate_on_client_validation(self, clients=None):
+    
+    def evaluate_on_client_validation(self, clients=None):
           """
           Returns:
           avg_acc: float
