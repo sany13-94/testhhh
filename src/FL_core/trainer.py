@@ -68,6 +68,9 @@ class Trainer:
         kw['drop_last'] = True          # force dropping incomplete last batch
         dataloader = DataLoader(data, **kw)
         print(f' ===={len(dataloader)}')
+        for num_update, (input, labels) in enumerate(dataloader):
+            print("batch sizes:", input.size(0), labels.size(0))
+          
 
         self.model = self.model.to(self.device)
 
