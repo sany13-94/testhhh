@@ -34,7 +34,11 @@ class Trainer:
         self.model = model
         self.client_optimizer = args.client_optimizer
 
-
+    # helper at top of the class (optional)
+    def _dl_kwargs(self, **overrides):
+      kw = dict(self.loader_kwargs)
+      kw.update(overrides)  # your overrides win
+      return kw
     def get_model(self):
         """
         get current model
@@ -59,7 +63,7 @@ class Trainer:
         """
         #dataloader = DataLoader(data, **self.loader_kwargs)
         # 1) in train()
-        dataloader = DataLoader(data, drop_last=True, **self.loader_kwargs)
+        dataloader = DataLoader(data, **self._dl_kwargs(drop_last=True))
 
         self.model = self.model.to(self.device)
 
@@ -130,7 +134,7 @@ class Trainer:
         #dataloader = DataLoader(data, **self.loader_kwargs)
 
         # 2) in train_E0()
-        dataloader = DataLoader(data, drop_last=True, **self.loader_kwargs)
+        dataloader = DataLoader(data,**self._dl_kwargs(drop_last=True))
 
         self.model = self.model.to(self.device)
         self.model.train()
@@ -185,7 +189,7 @@ class Trainer:
         #dataloader = DataLoader(data, **self.loader_kwargs)
 
         # 3) in test()
-        dataloader = DataLoader(data, drop_last=True, **self.loader_kwargs)
+        dataloader = DataLoader(data,**self._dl_kwargs(drop_last=True))
         model = model.to(self.device)
         model.eval()
 
