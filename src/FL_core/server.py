@@ -70,6 +70,9 @@ class Server(object):
         # initialize the training status of each client
         self._init_clients(init_model)
 
+        # after: self._init_clients(init_model)
+        self.trainer = self.client_list[0].trainer   # <-- use any client's trainer for eval
+
         # initialize the client selection method
         if self.args.method in NEED_SETUP_METHOD:
             self.selection_method.setup(self.train_sizes)
