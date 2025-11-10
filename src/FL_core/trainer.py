@@ -63,9 +63,7 @@ class Trainer:
         """
         #dataloader = DataLoader(data, **self.loader_kwargs)
         # 1) in train()
-        kw = dict(self.loader_kwargs)   # copy so we don't mutate the original
-        kw.pop('drop_last', None)       # remove any existing value
-        kw['drop_last'] = True          # force dropping incomplete last batch
+            # force dropping incomplete last batch
         #dataloader = DataLoader(data, **kw)
         dataloader = DataLoader(
         dataset=data,
