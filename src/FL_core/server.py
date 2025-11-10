@@ -33,10 +33,7 @@ class Server(object):
         self.test_clients = data['test']['data_sizes'].keys()
         # ---- PARTICIPATION TRACKING ----
 
-        # Initialize participation counters
-        self.participation_counts = np.zeros(self.total_num_client, dtype=int)
-        self.participation_history = []  # (round_idx, [client_ids])
-
+        
         # We used the dataset adapter to store *validation* sets in the 'test' slot on purpose.
         self.val_data = data['test']['data']           # dict: cid -> Dataset (client-specific validation)
         self.num_clients = len(self.train_data)
@@ -69,6 +66,10 @@ class Server(object):
             del files['num_samples']
 
         self.test_on_training_data = False
+        # Initialize participation counters
+        self.participation_counts = np.zeros(self.total_num_client, dtype=int)
+        self.participation_history = []  # (round_idx, [client_ids])
+
 
         ## INITIALIZE
         # initialize the training status of each client
