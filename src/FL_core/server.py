@@ -72,6 +72,7 @@ class Server(object):
 
         # inside Server.__init__
         self.simulate_stragglers = getattr(args, "simulate_stragglers", "0,1")
+        print(f'stragglers : {self.simulate_stragglers}')
         self.delay_base_sec = getattr(args, "delay_base_sec", 10.0)
         self.delay_jitter_sec = getattr(args, "delay_jitter_sec", 3.0)
         self.delay_prob = getattr(args, "delay_prob", 1.0)
@@ -99,7 +100,7 @@ class Server(object):
         colors = None
         # simple mapping 0/1/2/3 -> distinct colors
         cmap = {0: "#4e79a7", 1: "#f28e2b", 2: "#e15759", 3: "#76b7b2"}
-        out_dir = Path("/kaggle/working/results")
+        out_dir = Path("/kaggle/working/testhhh/results")
         out_dir.mkdir(parents=True, exist_ok=True)
         png_path = out_dir / f"participation_{title.replace(' ', '_')}.png"
         csv_path = out_dir / f"participation_{title.replace(' ', '_')}.csv"
@@ -178,7 +179,7 @@ class Server(object):
               from pathlib import Path
               import pandas as pd
 
-              xls_path = Path("/kaggle/working/results/client_valid_accuracy.xlsx")
+              xls_path = Path("/kaggle/working/testhhh/results/client_valid_accuracy.xlsx")
               # load records
               try:
                 xls = pd.ExcelFile(xls_path)
