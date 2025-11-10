@@ -64,7 +64,7 @@ def create_model(args):
         model = CNN_CIFAR_dropout()
     elif args.dataset == 'PathMNISTDomain':
       # pick a 3-channel model you already have
-      model = CNN_CIFAR_dropout()  # if this one expects 3 channels
+        model = resnet18(num_classes=args.num_classes, group_norm=args.num_gn)  # ResNet18+GN
 
 
     model = model.to(args.device)
