@@ -79,6 +79,7 @@ class Trainer:
        
 
         self.model = self.model.to(self.device)
+        print(self.model)
 
         
         self.model.train()
