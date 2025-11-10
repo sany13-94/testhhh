@@ -57,7 +57,9 @@ class Trainer:
         Returns
             accuracy, loss
         """
-        dataloader = DataLoader(data, **self.loader_kwargs)
+        #dataloader = DataLoader(data, **self.loader_kwargs)
+        # 1) in train()
+        dataloader = DataLoader(data, drop_last=True, **self.loader_kwargs)
 
         self.model = self.model.to(self.device)
 
@@ -125,7 +127,10 @@ class Trainer:
         Returns
             accuracy, loss
         """
-        dataloader = DataLoader(data, **self.loader_kwargs)
+        #dataloader = DataLoader(data, **self.loader_kwargs)
+
+        # 2) in train_E0()
+        dataloader = DataLoader(data, drop_last=True, **self.loader_kwargs)
 
         self.model = self.model.to(self.device)
         self.model.train()
@@ -177,8 +182,10 @@ class Trainer:
         Returns
             accuracy, loss, AUC (optional)
         """
-        dataloader = DataLoader(data, **self.loader_kwargs)
+        #dataloader = DataLoader(data, **self.loader_kwargs)
 
+        # 3) in test()
+        dataloader = DataLoader(data, drop_last=True, **self.loader_kwargs)
         model = model.to(self.device)
         model.eval()
 
