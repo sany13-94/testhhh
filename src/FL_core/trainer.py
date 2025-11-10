@@ -53,7 +53,7 @@ class Trainer:
         """
         self.model.load_state_dict(model.cpu().state_dict())
 
-    def train(self, data , cfg):
+    def train(self, data , client_idx,cfg):
         """
         train
         ---
@@ -128,7 +128,7 @@ class Trainer:
         assert total > 0
         if cfg is not None:
           simulate_ids = {str(s).strip() for s in (cfg.get("simulate_stragglers") or "").split(",") if s}
-          uuid = str(self.client_id)
+          uuid = client_idx
           simulate_delay = (uuid in simulate_ids) and (random.random() < cfg.get("delay_prob", 1.0))
 
           if simulate_delay:

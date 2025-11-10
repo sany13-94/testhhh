@@ -49,7 +49,7 @@ class Client(object):
             
         else:
             #result = self.trainer.train(self.labeled_data)
-            result = self.trainer.train(self.labeled_data, cfg=cfg)
+            result = self.trainer.train(self.labeled_data, self.client_idx,cfg=cfg,)
         #result['model'] = self.trainer.get_model()
 
         # total loss / sqrt (# of local data)
