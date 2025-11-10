@@ -135,6 +135,9 @@ def build_pathmnist_emnist_style(
     ds_test  = LazyPathMNIST(split='test')
     aug = build_augmentation_transform()
 
+    ds_train = _trim_to_multiple(ds_train, 32)
+    ds_test   = _trim_to_multiple(ds_test,  32)
+
     num_train_clients = k - 1  # last client will be built from test split (domain 3)
 
     # ---- Assign train clients to domains 0..2 as in your code ----
@@ -215,7 +218,16 @@ def build_pathmnist_emnist_style(
     return dataset
 
 # ------------------ Public class used by main.py ------------------
+from torch.utils.data import Subset
 
+def _trim_to_multiple(ds, batch_size: int):
+    L = len(ds)
+    if L < batch_size:
+        return ds
+    L_trim = (L // batch_size) * batch_size
+    if L_trim == L:
+        return ds
+    return Subset(ds, list(range(L_trim)))
 class PathMNISTDomainDataset:
     """Mirror EMNIST interface so the existing Server works unchanged."""
     def __init__(self, args):
