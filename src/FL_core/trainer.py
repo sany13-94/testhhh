@@ -7,7 +7,8 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import numpy as np
 from sklearn.metrics import roc_auc_score
-
+import random
+import time
 
 class Trainer:
     def __init__(self, model, args):
@@ -52,7 +53,7 @@ class Trainer:
         """
         self.model.load_state_dict(model.cpu().state_dict())
 
-    def train(self, data):
+    def train(self, data , cfg):
         """
         train
         ---
@@ -125,6 +126,17 @@ class Trainer:
         self.model = self.model.cpu()
 
         assert total > 0
+        if cfg is not None:
+          simulate_ids = {str(s).strip() for s in (cfg.get("simulate_stragglers") or "").split(",") if s}
+          uuid = str(self.client_id)
+          simulate_delay = (uuid in simulate_ids) and (random.random() < cfg.get("delay_prob", 1.0))
+
+          if simulate_delay:
+            base = float(cfg.get("delay_base_sec", 10.0))
+            jitter = float(cfg.get("delay_jitter_sec", 3.0))
+            delay = base + random.uniform(0.0, jitter)
+            print(f"[Client {uuid}] Simulating straggler delay: {delay:.2f}s")
+            time.sleep(delay)
             
         result = {'loss': train_loss / total, 'acc': correct / total, 'metric': train_loss / total}
         

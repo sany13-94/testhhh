@@ -70,7 +70,11 @@ class Server(object):
         self.participation_counts = np.zeros(self.total_num_client, dtype=int)
         self.participation_history = []  # (round_idx, [client_ids])
 
-
+        # inside Server.__init__
+        self.simulate_stragglers = getattr(args, "simulate_stragglers", "0,1")
+        self.delay_base_sec = getattr(args, "delay_base_sec", 10.0)
+        self.delay_jitter_sec = getattr(args, "delay_jitter_sec", 3.0)
+        self.delay_prob = getattr(args, "delay_prob", 1.0)
         ## INITIALIZE
         # initialize the training status of each client
         self._init_clients(init_model)
@@ -89,16 +93,13 @@ class Server(object):
     
 
     def save_participation_report(self, title: str = "Pow-d"):
-      """
-      Saves a bar chart and a CSV of client participation counts.
-      """
-      colors = None
-      if getattr(self, "domain_map", None) is not None:
-        doms = np.array(self.domain_map)
+        """
+        Saves a bar chart and a CSV of client participation counts.
+        """
+        colors = None
         # simple mapping 0/1/2/3 -> distinct colors
         cmap = {0: "#4e79a7", 1: "#f28e2b", 2: "#e15759", 3: "#76b7b2"}
-        colors = [cmap.get(int(d), "#999999") for d in doms]
-        out_dir = Path("/results")
+        out_dir = Path("/kaggle/working/results")
         out_dir.mkdir(parents=True, exist_ok=True)
         png_path = out_dir / f"participation_{title.replace(' ', '_')}.png"
         csv_path = out_dir / f"participation_{title.replace(' ', '_')}.csv"
@@ -177,7 +178,7 @@ class Server(object):
               from pathlib import Path
               import pandas as pd
 
-              xls_path = Path("/results/client_valid_accuracy.xlsx")
+              xls_path = Path("/kaggle/working/results/client_valid_accuracy.xlsx")
               # load records
               try:
                 xls = pd.ExcelFile(xls_path)
@@ -359,7 +360,7 @@ class Server(object):
 
 
 
-    def local_training(self, client_idx):
+    def local_training(self, client_idx , cfg=None):
         """
         train one client
         ---
@@ -373,7 +374,7 @@ class Server(object):
         print(type(self.client_list))
         if self.args.method in LOSS_THRESHOLD:
             client.trainer.update_ltr(self.ltr)
-        result = client.train(deepcopy(self.global_model))
+        result = client.train(deepcopy(self.global_model), cfg=cfg)
         return result
 
     def local_testing(self, client_idx):
@@ -420,7 +421,18 @@ class Server(object):
         # local training without multi processing
         else:
             for client_idx in client_indices:
-                result = self.local_training(client_idx)
+                client_config = {
+            "server_round": round_idx if round_idx is not None else -1,
+            "total_rounds": self.total_round,
+            "simulate_stragglers": self.simulate_stragglers,  # e.g. "0,1"
+            "delay_base_sec": self.delay_base_sec,
+            "delay_jitter_sec": self.delay_jitter_sec,
+            "delay_prob": self.delay_prob,
+        }
+
+                result = self.local_training(client_idx , cfg=client_config)
+
+                
 
                 local_losses.append(result['loss'])
                 accuracy.append(result['acc'])

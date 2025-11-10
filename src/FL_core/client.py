@@ -31,7 +31,7 @@ class Client(object):
         self.labeled_data = local_train_data  # train_data
 
 
-    def train(self, global_model):
+    def train(self, global_model, cfg=None):
         """
         train each client
         ---
@@ -46,8 +46,10 @@ class Client(object):
         # TRAIN
         if self.num_epoch == 0:  # no SGD updates
             result = self.trainer.train_E0(self.labeled_data)
+            
         else:
-            result = self.trainer.train(self.labeled_data)
+            #result = self.trainer.train(self.labeled_data)
+            result = self.trainer.train(self.labeled_data, cfg=cfg)
         #result['model'] = self.trainer.get_model()
 
         # total loss / sqrt (# of local data)
