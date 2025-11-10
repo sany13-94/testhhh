@@ -100,9 +100,12 @@ class Trainer:
             for num_update, (input, labels) in enumerate(dataloader):
                 input, labels = input.to(self.device), labels.to(self.device)
                 print(labels.shape)
+
                 optimizer.zero_grad()
                 output = self.model(input)
                 _, preds = torch.max(output.detach().data, 1)
+
+                print(output.shape)
 
                 loss = criterion(output, labels.long())
 
