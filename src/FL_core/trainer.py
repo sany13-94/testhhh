@@ -66,8 +66,17 @@ class Trainer:
         kw = dict(self.loader_kwargs)   # copy so we don't mutate the original
         kw.pop('drop_last', None)       # remove any existing value
         kw['drop_last'] = True          # force dropping incomplete last batch
-        dataloader = DataLoader(data, **kw)
+        #dataloader = DataLoader(data, **kw)
         print(f' ===={len(dataloader)}')
+        dataloader = DataLoader(
+        dataset=data,
+        batch_size=self.batch_size,
+        shuffle=True,
+        num_workers=0,     # safer on Kaggle; avoids multiprocessing oddities
+        pin_memory=True,
+        drop_last=True,    # <- critical
+    )
+
        
 
         self.model = self.model.to(self.device)
