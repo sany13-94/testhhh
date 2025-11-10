@@ -67,6 +67,7 @@ class Trainer:
         kw.pop('drop_last', None)       # remove any existing value
         kw['drop_last'] = True          # force dropping incomplete last batch
         dataloader = DataLoader(data, **kw)
+        print(f' ===={len(dataloader)}')
 
         self.model = self.model.to(self.device)
 
