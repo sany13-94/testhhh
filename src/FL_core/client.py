@@ -49,7 +49,7 @@ class Client(object):
       # feature extractor from GLOBAL model (not the local trainer copy)
       feat_net = FeatureExtractor(global_model).to(device)
       proto = compute_macro_prototype_from_loader(dl, feat_net, device, max_batches=max_batches)
-      return None if proto is None else proto.numpy()
+      return None if proto is None else proto
 
     def train(self, global_model, cfg=None):
         """
