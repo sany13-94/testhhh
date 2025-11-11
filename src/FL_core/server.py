@@ -11,7 +11,7 @@ from .client import Client
 from .client_selection.config import *
 from pathlib import Path
 import matplotlib.pyplot as plt
-
+import time
 class Server(object):
     def __init__(self, data, init_model, args, selection, fed_algo, files):
         """
