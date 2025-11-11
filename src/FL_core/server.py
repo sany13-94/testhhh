@@ -285,7 +285,7 @@ class Server(object):
 
       # use the GLOBAL model to compute all prototypes (consistent space)
       for client in self.client_list:
-        cid = client.client_id
+        cid = client.client_idx
         dom = int(self.domain_map[cid])
         proto = client.proto_from_validation(self.global_model, self.device, batch_size=batch_size, max_batches=max_batches)
         if proto is not None:
