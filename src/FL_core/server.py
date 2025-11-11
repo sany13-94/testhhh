@@ -186,8 +186,9 @@ class Server(object):
             try:
               from pathlib import Path
               import pandas as pd
+              xls_path = self.save_results / f"client_valid_accuracy.xlsx"
 
-              xls_path = Path("/kaggle/working/testhhh/results/client_valid_accuracy.xlsx")
+              #xls_path = Path("/kaggle/working/testhhh/results/client_valid_accuracy.xlsx")
               # load records
               try:
                 xls = pd.ExcelFile(xls_path)
@@ -212,10 +213,6 @@ class Server(object):
                                .sort_values("client_id"))
               else:
                 df_averages = pd.DataFrame(columns=["client_id","avg_val_acc","count"])
-
-              with pd.ExcelWriter(xls_path, engine="openpyxl", mode="w") as w:
-                df_records.to_excel(w, index=False, sheet_name="records")
-                df_averages.to_excel(w, index=False, sheet_name="averages")
             except Exception:
               pass  # logging is optional; don't block training
 
