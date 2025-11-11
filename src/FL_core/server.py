@@ -33,7 +33,15 @@ class Server(object):
         self.test_clients = data['test']['data_sizes'].keys()
         # ---- PARTICIPATION TRACKING ----
 
-        
+        # --- Round timing + result paths ---
+        self.round_logs = []          # list of dicts, one per round
+        self.cum_time = 0.0           # cumulative wall-clock time (seconds)
+
+        self.results_dir = Path("/kaggle/working/testhhh/results")
+        self.results_dir.mkdir(parents=True, exist_ok=True)
+        self.round_csv = self.results_dir / f"round_log_{self.args.method}.csv"
+        self.acc_time_png = self.results_dir / f"acc_vs_time_{self.args.method}.png"
+
         # We used the dataset adapter to store *validation* sets in the 'test' slot on purpose.
         self.val_data = data['test']['data']           # dict: cid -> Dataset (client-specific validation)
         self.num_clients = len(self.train_data)
@@ -240,6 +248,7 @@ class Server(object):
         ## ITER COMMUNICATION ROUND
         for round_idx in range(self.total_round):
             print(f'\n>> ROUND {round_idx}')
+            round_t0 = time.time()
 
             ## GET GLOBAL MODEL
             #self.global_model = self.trainer.get_model()
@@ -346,6 +355,17 @@ class Server(object):
 
             # You can print/log this:
             print(f"[Round {round_idx}] Avg client-val accuracy: {avg_val_acc:.4f}")
+            # --- Stop timer & append round record ---
+            elapsed = time.time() - round_t0
+            self.cum_time += elapsed
+            self.round_logs.append({
+    "round": int(round_idx),
+    "elapsed_sec": float(elapsed),
+    "cum_time_sec": float(self.cum_time),
+    "avg_val_acc": float(avg_val_acc),
+    "method": str(self.args.method),
+})
+
             # If you use wandb:
             if getattr(self.args, "wandb", False):
               import wandb
@@ -354,6 +374,28 @@ class Server(object):
             del local_models, local_losses, accuracy
 
         self.save_participation_report(title=self.args.method)
+
+        # --- Persist per-round CSV and Acc-vs-Time plot ---
+        try:
+          df_round = pd.DataFrame(self.round_logs)
+          if not df_round.empty:
+            df_round.to_csv(self.round_csv, index=False)
+            print(f"[RoundLog] saved: {self.round_csv}")
+
+            # Plot: Average client-validation accuracy vs cumulative time
+            plt.figure(figsize=(8, 4))
+            plt.plot(df_round["cum_time_sec"], df_round["avg_val_acc"], marker="o")
+            plt.xlabel("Cumulative time (s)")
+            plt.ylabel("Avg client-val accuracy")
+            plt.title(f"Accuracy vs Time — {self.args.method}")
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.savefig(self.acc_time_png, dpi=180)
+            plt.close()
+            print(f"[Plot] saved: {self.acc_time_png}")
+        except Exception as e:
+          print(f"[RoundLog] save failed: {e}")
+
 
         for k in self.files:
             if self.files[k] is not None:
