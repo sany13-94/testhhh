@@ -112,7 +112,8 @@ class Server(object):
 
         self.domain_assignment = dom_map
         self.domain_map = dom_map   # all our plotting/helpers use self.domain_map
-
+        print(f"[WARN] domain_assignment length={len(self.domain_map)} "
+                  f"!=Heatmaps may be misaligned. {self.domain_map}")
         # basic sanity checks (won't crash training, just warn)
         try:
           if self.domain_map is not None:
