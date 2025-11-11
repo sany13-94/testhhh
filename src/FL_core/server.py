@@ -39,8 +39,8 @@ class Server(object):
 
         self.results_dir = Path("/kaggle/working/testhhh/results")
         self.results_dir.mkdir(parents=True, exist_ok=True)
-        self.round_csv = self.results_dir / f"round_log_{self.args.method}.csv"
-        self.acc_time_png = self.results_dir / f"acc_vs_time_{self.args.method}.png"
+        self.round_csv = self.results_dir / f"round_log_pov.csv"
+        self.acc_time_png = self.results_dir / f"acc_vs_time_pov.png"
 
         # We used the dataset adapter to store *validation* sets in the 'test' slot on purpose.
         self.val_data = data['test']['data']           # dict: cid -> Dataset (client-specific validation)
