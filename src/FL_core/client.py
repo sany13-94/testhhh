@@ -3,7 +3,20 @@ import numpy as np
 import torch.nn.functional as F
 import torch
 from copy import deepcopy
-from .server import FeatureExtractor , compute_macro_prototype_from_loader
+from FL_core.feature_extractor import FeatureExtractor, compute_macro_prototype_from_loader
+
+@torch.no_grad()
+def proto_from_validation(self, global_model, device, batch_size=64, max_batches=3):
+    ds = self.test_data if (self.test_data is not None and len(self.test_data) > 0) else self.labeled_data
+    if ds is None or (hasattr(ds, "__len__") and len(ds) == 0):
+        return None
+
+    dl = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=True,
+                                     num_workers=0, pin_memory=True)
+    feat_net = FeatureExtractor(global_model).to(device)
+    proto = compute_macro_prototype_from_loader(dl, feat_net, device, max_batches=max_batches)
+    return proto
+
 
 class Client(object):
     def __init__(self, client_idx, nTrain, local_train_data, local_test_data, model, args):
