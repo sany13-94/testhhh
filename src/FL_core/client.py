@@ -3,7 +3,7 @@ import numpy as np
 import torch.nn.functional as F
 import torch
 from copy import deepcopy
-
+from .server import FeatureExtractor , compute_macro_prototype_from_loader
 
 class Client(object):
     def __init__(self, client_idx, nTrain, local_train_data, local_test_data, model, args):

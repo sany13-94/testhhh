@@ -162,6 +162,5 @@ if __name__ == '__main__':
     ## train
     # set federated optim algorithm
     ServerExecute = Server(dataset, model, args, client_selection, fed_algo, files)
-    ServerExecute.domain_assignment = domain_assignment  # inject the mapping
 
     ServerExecute.train()
