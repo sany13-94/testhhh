@@ -101,6 +101,30 @@ class Server(object):
         self.test_data = data['test']['data']
         self.test_sizes = data['test']['data_sizes']
         self.test_clients = data['test']['data_sizes'].keys()
+   
+        meta = data.get('meta', {}) if isinstance(data, dict) else {}
+        dom_map = meta.get('domain_assignment', None)
+
+        # also accept object-style datasets that may attach the array on the object
+        if dom_map is None and hasattr(data, "domain_assignment"):
+          dom_map = getattr(data, "domain_assignment")
+
+
+        self.domain_assignment = dom_map
+        self.domain_map = dom_map   # all our plotting/helpers use self.domain_map
+
+        # basic sanity checks (won't crash training, just warn)
+        try:
+          if self.domain_map is not None:
+            K = self.total_num_client
+            if len(self.domain_map) != K:
+              print(f"[WARN] domain_assignment length={len(self.domain_map)} "
+                  f"!= total_num_client={K}. Heatmaps may be misaligned.")
+            uniq = sorted(set(int(x) for x in self.domain_map))
+            print(f"[INFO] domain IDs seen: {uniq}")
+        except Exception as e:
+          print(f"[WARN] could not validate domain map: {e}")
+
 
         # ---- PARTICIPATION TRACKING ----
 
@@ -163,7 +187,6 @@ class Server(object):
         self.trainer = self.client_list[0].trainer   # <-- use any client's trainer for eval
   
         # map client → domain (from your PathMNIST adapter); list/array of ints
-        self.domain_map = getattr(self, "domain_assignment", None)
 
         # prototype logging
         self.proto_history = []            # list per round: {"round": r, "assignments": {cid: dom}, "sims": {cid: {dom: sim}}}
