@@ -12,6 +12,76 @@ from .client_selection.config import *
 from pathlib import Path
 import matplotlib.pyplot as plt
 import time
+import torch
+import torch.nn as nn
+import numpy as np
+import pandas as pd
+from collections import defaultdict
+from pathlib import Path
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap, BoundaryNorm
+
+ # PATCH: evaluate global model on each client's validation set and average
+    
+class FeatureExtractor(nn.Module):
+    """
+    Wrap a classifier and return penultimate features.
+    Works for ResNet-like models (conv trunk -> avgpool -> fc).
+    """
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+        if hasattr(model, "fc") and isinstance(model.fc, nn.Linear):
+            # up to avgpool (exclude the final fc)
+            self.backbone = nn.Sequential(*(list(model.children())[:-1]))
+            self.feat_dim = model.fc.in_features
+        else:
+            # You can adapt for other models if needed
+            raise RuntimeError("FeatureExtractor: please adapt forward() for your model type.")
+
+    def forward(self, x):
+        z = self.backbone(x)    # (B, C, 1, 1)
+        z = torch.flatten(z, 1) # (B, C)
+        return z
+
+
+@torch.no_grad()
+def compute_macro_prototype_from_loader(dataloader, feature_net, device, max_batches=3):
+    """
+    Compute a macro prototype: average of per-class mean features.
+    Uses up to max_batches to keep cost low.
+    """
+    feature_net.eval()
+    class_sums, class_counts = {}, {}
+    n_batches = 0
+
+    for x, y in dataloader:
+        x = x.to(device, non_blocking=True)
+        y = y.to(device, non_blocking=True)
+        z = feature_net(x)  # [B, D]
+        for c in y.unique().tolist():
+            mask = (y == c)
+            if mask.any():
+                cls_vec = z[mask].mean(dim=0)  # mean feature for class c in this batch
+                class_sums[c]  = class_sums.get(c, 0) + cls_vec
+                class_counts[c] = class_counts.get(c, 0) + 1
+        n_batches += 1
+        if n_batches >= max_batches:
+            break
+
+    if not class_sums:
+        return None  # no data?
+    per_class = []
+    for c, s in class_sums.items():
+        per_class.append((s / class_counts[c]).unsqueeze(0))
+    macro = torch.cat(per_class, dim=0).mean(dim=0)  # [D]
+    return macro.detach().cpu()
+
+
+def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
+    denom = (np.linalg.norm(a) * np.linalg.norm(b) + 1e-12)
+    return float(np.dot(a, b) / denom)
+
 class Server(object):
     def __init__(self, data, init_model, args, selection, fed_algo, files):
         """
@@ -31,6 +101,7 @@ class Server(object):
         self.test_data = data['test']['data']
         self.test_sizes = data['test']['data_sizes']
         self.test_clients = data['test']['data_sizes'].keys()
+
         # ---- PARTICIPATION TRACKING ----
 
         # --- Round timing + result paths ---
@@ -90,6 +161,14 @@ class Server(object):
 
         # after: self._init_clients(init_model)
         self.trainer = self.client_list[0].trainer   # <-- use any client's trainer for eval
+  
+        # map client → domain (from your PathMNIST adapter); list/array of ints
+        self.domain_map = getattr(self, "domain_assignment", None)
+
+        # prototype logging
+        self.proto_history = []            # list per round: {"round": r, "assignments": {cid: dom}, "sims": {cid: {dom: sim}}}
+        self.domain_centroids = None       # dict dom_id -> np.array vector
+        self.proto_max_batches = getattr(self.args, "proto_max_batches", 3)  # optional CLI arg
 
         # initialize the client selection method
         if self.args.method in NEED_SETUP_METHOD:
@@ -98,8 +177,7 @@ class Server(object):
         if self.args.method in LOSS_THRESHOLD:
             self.ltr = 0.0
 
-        # PATCH: evaluate global model on each client's validation set and average
-    
+       
 
     def save_participation_report(self, title: str = "Pow-d"):
         """
@@ -166,6 +244,78 @@ class Server(object):
         df_total.to_csv(csv_path, index=False)
 
         print(f"[Participation] saved: {png_path}")
+
+    def _build_domain_centroids_from_valid(self, batch_size=None, max_batches=None):
+      """
+      Build domain centroids = mean of client macro-prototypes per domain.
+      Uses each client's validation set (preferred) to be consistent with your analysis.
+      """
+      if self.domain_map is None:
+        self.domain_centroids = None
+        return
+
+      if batch_size is None: batch_size = getattr(self.args, "batch_size", 64)
+      if max_batches is None: max_batches = self.proto_max_batches
+
+      dom2vecs = defaultdict(list)
+
+      # use the GLOBAL model to compute all prototypes (consistent space)
+      for client in self.client_list:
+        cid = client.client_id
+        dom = int(self.domain_map[cid])
+        proto = client.proto_from_validation(self.global_model, self.device, batch_size=batch_size, max_batches=max_batches)
+        if proto is not None:
+            dom2vecs[dom].append(proto)
+
+      centroids = {}
+      for dom, vecs in dom2vecs.items():
+        centroids[dom] = np.stack(vecs, axis=0).mean(axis=0)  # np.array [D]
+      self.domain_centroids = centroids
+
+
+    @torch.no_grad()
+    def _log_selected_client_prototypes_from_valid(self, round_idx, selected_client_ids):
+      """
+      For selected clients this round, compute macro prototype (validation),
+      then assign to nearest domain centroid by cosine similarity.
+      """
+      # build centroids first (once early, or refresh occasionally if you want)
+      if self.domain_centroids is None or (round_idx == 0):
+        self._build_domain_centroids_from_valid()
+
+      assigns = {}
+      sims_all = {}
+
+      if not self.domain_centroids:  # None or empty
+        # log 'unknown' if no centroids available
+        for cid in selected_client_ids:
+            assigns[cid] = -1
+            sims_all[cid] = {}
+        self.proto_history.append({"round": round_idx, "assignments": assigns, "sims": sims_all})
+        return
+
+      for cid in selected_client_ids:
+        client = self.client_list[cid]
+        proto = client.proto_from_validation(self.global_model, self.device,
+                                             batch_size=getattr(self.args, "batch_size", 64),
+                                             max_batches=self.proto_max_batches)
+        if proto is None:
+            assigns[cid] = -1
+            sims_all[cid] = {}
+            continue
+
+        best_dom, best_sim = None, -1.0
+        sims = {}
+        for dom, cen in self.domain_centroids.items():
+            s = cosine_sim(proto, cen)
+            sims[int(dom)] = s
+            if s > best_sim:
+                best_sim, best_dom = s, int(dom)
+        assigns[cid] = best_dom if best_dom is not None else -1
+        sims_all[cid] = sims
+
+      self.proto_history.append({"round": round_idx, "assignments": assigns, "sims": sims_all})
+
 
     def evaluate_on_client_validation(self, clients=None):
           """
@@ -237,6 +387,62 @@ class Server(object):
 
 
     #visualization clients participants
+    def save_proto_domain_heatmap(self, title_suffix="Pow-d (valid prototypes)"):
+      """
+      Heatmap: rows=rounds, cols=clients.
+      Cell = 0 if not selected; otherwise 1 + inferred_domain (from validation prototypes).
+      Also writes CSV with per-round inferred domain for each selected client.
+      """
+      out_dir = self.results_dir
+      out_dir.mkdir(parents=True, exist_ok=True)
+      png_path = out_dir / f"proto_rounds_x_clients_pov.png"
+      csv_path = out_dir / f"proto_rounds_x_clients_pov.csv"
+
+      if not self.proto_history:
+        print("[ProtoHeatmap] No prototype history.")
+        return
+
+      R = max(h["round"] for h in self.proto_history) + 1
+      N = self.total_num_client
+      M = np.zeros((R, N), dtype=int)
+      rows = []
+
+      for h in self.proto_history:
+        r = int(h["round"])
+        assigns = h["assignments"]  # {cid: dom or -1}
+        for cid, dom in assigns.items():
+            if dom is None or dom < 0:
+                continue
+            M[r, int(cid)] = int(dom) + 1
+            rows.append({"round": r, "client_id": int(cid), "inferred_domain": int(dom)})
+
+      pd.DataFrame(rows).to_csv(csv_path, index=False)
+      print(f"[ProtoHeatmap/CSV] saved: {csv_path}")
+
+      # palette (0 = not selected)
+      K = max(1, int(M.max()))
+      palette = ["#ffffff", "#4e79a7", "#f28e2b", "#e15759", "#76b7b2",
+               "#59a14f", "#edc948", "#b07aa1", "#ff9da7", "#9c755f"]
+      cmap = ListedColormap(palette[:K+1])
+      bounds = list(range(0, K+2))
+      norm = BoundaryNorm(bounds, cmap.N)
+
+      plt.figure(figsize=(min(14, max(10, N*0.55)), min(12, max(6, R*0.12))))
+      im = plt.imshow(M, aspect="auto", cmap=cmap, norm=norm)
+      cbar = plt.colorbar(im, ticks=list(range(0, K+1)))
+      ticks = ["Not selected"] + [f"Proto-domain {i}" for i in range(1, K+1)]
+      cbar.ax.set_yticklabels(ticks)
+
+      plt.title(f"Per-round client selection (prototype-inferred domain) — {title_suffix}", pad=12)
+      plt.xlabel("Client ID"); plt.ylabel("Round")
+      plt.xticks(np.arange(N), [str(i) for i in range(N)], rotation=45, ha="right")
+      step = max(1, R // 20)
+      plt.yticks(np.arange(0, R, step), [str(i) for i in range(0, R, step)])
+
+      plt.tight_layout()
+      plt.savefig(png_path, dpi=200)
+      plt.close()
+      print(f"[ProtoHeatmap] saved: {png_path}")
 
     def train(self):
         """
@@ -332,6 +538,9 @@ class Server(object):
 
             # update aggregated model to global model
             self.global_model.load_state_dict(global_model_params)
+            
+            # after final selection is decided (the clients that will really train this round)
+            self._log_selected_client_prototypes_from_valid(round_idx, client_indices)
 
             
             ## TEST
@@ -349,7 +558,7 @@ class Server(object):
 
             # Replace the old "global test" with per-client validation averaging:
             avg_val_acc, per_client_vals = self.evaluate_on_client_validation()
-
+      
             # You can print/log this:
             print(f"[Round {round_idx}] Avg client-val accuracy: {avg_val_acc:.4f}")
             # --- Stop timer & append round record ---
@@ -393,6 +602,7 @@ class Server(object):
         except Exception as e:
           print(f"[RoundLog] save failed: {e}")
 
+        self.save_proto_domain_heatmap(title_suffix=self.args.method)
 
         for k in self.files:
             if self.files[k] is not None:

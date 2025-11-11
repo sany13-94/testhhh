@@ -30,6 +30,23 @@ class Client(object):
         self.labeled_indices = [*range(nTrain)]
         self.labeled_data = local_train_data  # train_data
 
+    @torch.no_grad()
+    def proto_from_validation(self, global_model, device, batch_size=64, max_batches=3):
+      """
+      Build a macro prototype for THIS client from its validation data (self.test_data).
+      Falls back to train data if no valid set exists.
+      """
+      # prefer validation data (your adapter puts per-client valid sets in 'test' slot)
+      ds = self.test_data if (self.test_data is not None and len(self.test_data) > 0) else self.labeled_data
+      if ds is None or (hasattr(ds, "__len__") and len(ds) == 0):
+        return None
+
+      dl = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
+
+      # feature extractor from GLOBAL model (not the local trainer copy)
+      feat_net = FeatureExtractor(global_model).to(device)
+      proto = compute_macro_prototype_from_loader(dl, feat_net, device, max_batches=max_batches)
+      return None if proto is None else proto.numpy()
 
     def train(self, global_model, cfg=None):
         """
