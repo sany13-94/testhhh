@@ -138,6 +138,7 @@ class Server(object):
         self.results_dir.mkdir(parents=True, exist_ok=True)
         self.round_csv = self.results_dir / f"round_log_pov.csv"
         self.acc_time_png = self.results_dir / f"acc_vs_time_pov.png"
+        self.args.method="pow"
         self.round_csv_path = self.results_dir / f"round_log_{self.args.method}.csv"
         # Cumulative time across rounds (for resumed runs we may overwrite below)
         self.cum_time = 0.0
