@@ -153,6 +153,8 @@ if __name__ == '__main__':
 
     # set model
     model = create_model(args)
+
+    
     client_selection = client_selection_method(args)
     fed_algo = federated_algorithm(dataset, model, args)
 
@@ -163,4 +165,40 @@ if __name__ == '__main__':
     # set federated optim algorithm
     ServerExecute = Server(dataset, model, args, client_selection, fed_algo, files)
 
-    ServerExecute.train()
+    # ---------------------------------------------------
+    # Optional: resume from checkpoint
+    # ---------------------------------------------------
+    start_round = 0
+    if args.resume_ckpt is not None:
+        if os.path.isfile(args.resume_ckpt):
+            print(f"[Checkpoint] Loading from {args.resume_ckpt}")
+            ckpt = torch.load(args.resume_ckpt, map_location=args.device)
+
+            # Restore model weights
+            if "model_state_dict" in ckpt:
+                model.load_state_dict(ckpt["model_state_dict"])
+                print(f"[Checkpoint] Model weights restored.")
+            else:
+                print("[Checkpoint] WARNING: 'model_state_dict' not in checkpoint.")
+
+
+            if "cum_time_sec" in ckpt:
+                ServerExecute.cum_time = float(ckpt["cum_time_sec"])
+                print(f"[Checkpoint] Restored cumulative time: {ServerExecute.cum_time:.2f} s")
+
+
+            # Decide which round to start from
+            if args.resume_round > 0:
+                start_round = args.resume_round
+                print(f"[Checkpoint] Overriding start_round to {start_round} from CLI.")
+            else:
+                start_round = int(ckpt.get("round", 0))
+                print(f"[Checkpoint] Resuming from round {start_round} (taken from checkpoint).")
+        else:
+            print(f"[Checkpoint] WARNING: resume_ckpt not found: {args.resume_ckpt}")
+
+    else:
+        print("[Checkpoint] No resume_ckpt provided, starting from round 0.")
+    
+    #ServerExecute.train()
+    ServerExecute.train(start_round=start_round)

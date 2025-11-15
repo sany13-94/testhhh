@@ -121,5 +121,31 @@ def get_args():
     parser.add_argument('--test_freq', type=int, default=1, help='test all frequency')
 
     parser.add_argument('--comment', type=str, default='', help='comment')
+    
+    # ----- Checkpointing for long Kaggle runs -----
+    parser.add_argument(
+        '--ckpt_dir',
+        type=str,
+        default='/kaggle/working/checkpoints',
+        help='Directory to save checkpoints (default: /kaggle/working/checkpoints)'
+    )
+    parser.add_argument(
+        '--ckpt_freq',
+        type=int,
+        default=20,
+        help='Save a checkpoint every ckpt_freq global rounds (default: 20)'
+    )
+    parser.add_argument(
+        '--resume_ckpt',
+        type=str,
+        default=None,
+        help='Path to checkpoint .pt file to resume from (default: None)'
+    )
+    parser.add_argument(
+        '--resume_round',
+        type=int,
+        default=0,
+        help='Round index to resume from (0 = auto from checkpoint)'
+    )
     args = parser.parse_args()
     return args

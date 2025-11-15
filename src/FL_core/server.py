@@ -6,6 +6,7 @@ import numpy as np
 import sys
 import multiprocessing as mp
 import random
+import os
 import pandas as pd
 from .client import Client
 from .client_selection.config import *
@@ -137,7 +138,10 @@ class Server(object):
         self.results_dir.mkdir(parents=True, exist_ok=True)
         self.round_csv = self.results_dir / f"round_log_pov.csv"
         self.acc_time_png = self.results_dir / f"acc_vs_time_pov.png"
-
+        self.round_csv_path = self.results_dir / f"round_log_{self.args.method}.csv"
+        # Cumulative time across rounds (for resumed runs we may overwrite below)
+        self.cum_time = 0.0
+        self.round_logs = []  # in-memory copy (optional, for later plotting)
         # We used the dataset adapter to store *validation* sets in the 'test' slot on purpose.
         self.val_data = data['test']['data']           # dict: cid -> Dataset (client-specific validation)
         self.num_clients = len(self.train_data)
@@ -201,7 +205,28 @@ class Server(object):
         if self.args.method in LOSS_THRESHOLD:
             self.ltr = 0.0
 
-       
+        def save_checkpoint(self, round_completed: int):
+          """
+          Save a checkpoint with global model weights and round index.
+          This is lightweight (only model + round).
+          """
+          ckpt_dir = getattr(self.args, "ckpt_dir", "/kaggle/working/testhhh/checkpoints")
+          os.makedirs(ckpt_dir, exist_ok=True)
+
+          filename = f"{self.args.method}_round_{round_completed}.pt"
+          ckpt_path = os.path.join(ckpt_dir, filename)
+
+          payload = {
+            "round": round_completed,
+            "model_state_dict": self.global_model.state_dict(),
+            # optional: dump args dict for reference
+             "cum_time_sec": float(self.cum_time),
+            "args": dict(vars(self.args)),
+        }
+
+          torch.save(payload, ckpt_path)
+          print(f"[Checkpoint] Saved round {round_completed} -> {ckpt_path}")
+
 
     def save_participation_report(self, title: str = "Pow-d"):
         """
@@ -468,19 +493,20 @@ class Server(object):
       plt.close()
       print(f"[ProtoHeatmap] saved: {png_path}")
 
-    def train(self):
+    def train(self,start_round: int = 0):
         """
         FL training
         """
         ## ITER COMMUNICATION ROUND
-        for round_idx in range(self.total_round):
+        for round_idx in range(start_round, self.total_round):
+
             print(f'\n>> ROUND {round_idx}')
             round_t0 = time.time()
 
             ## GET GLOBAL MODEL
             #self.global_model = self.trainer.get_model()
             self.global_model = self.global_model.to(self.device)
-
+            ## ITER COMMUNICATION ROUND
             # set clients
             client_indices = [*range(self.total_num_client)]
             
@@ -568,6 +594,7 @@ class Server(object):
 
             
             ## TEST
+            """
             if round_idx % self.args.test_freq == 0:
                 self.global_model.eval()
                 # test on train dataset
@@ -577,7 +604,8 @@ class Server(object):
 
                 # test on test dataset
                 self.test(len(self.test_clients), phase='Test')
-            
+            """
+
             # PATCH: remember round index for logging
 
             # Replace the old "global test" with per-client validation averaging:
@@ -595,6 +623,13 @@ class Server(object):
     "avg_val_acc": float(avg_val_acc),
     "method": str(self.args.method),
 })
+            # ---------------------------------------------------
+            # CHECKPOINT: save every args.ckpt_freq rounds
+            # ---------------------------------------------------
+            ckpt_freq = getattr(self.args, "ckpt_freq", 20)
+            if (round_idx + 1) % ckpt_freq == 0 or (round_idx + 1) == self.total_round:
+                self.save_checkpoint(round_completed=round_idx + 1)
+
 
             # If you use wandb:
             if getattr(self.args, "wandb", False):
@@ -631,8 +666,6 @@ class Server(object):
         for k in self.files:
             if self.files[k] is not None:
                 self.files[k].close()
-
-
 
 
     def local_training(self, client_idx , cfg=None):
