@@ -126,7 +126,7 @@ def get_args():
     parser.add_argument(
         '--ckpt_dir',
         type=str,
-        default='/kaggle/working/checkpoints',
+        default='/kaggle/working/checkpoints/testhhh',
         help='Directory to save checkpoints (default: /kaggle/working/checkpoints)'
     )
     parser.add_argument(
