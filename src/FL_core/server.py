@@ -207,7 +207,7 @@ class Server(object):
         if self.args.method in LOSS_THRESHOLD:
             self.ltr = 0.0
 
-        def save_checkpoint(self, round_completed: int):
+    def save_checkpoint(self, round_completed: int):
           """
           Save a checkpoint with global model weights and round index.
           This is lightweight (only model + round).
