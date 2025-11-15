@@ -102,6 +102,7 @@ class Server(object):
         self.test_data = data['test']['data']
         self.test_sizes = data['test']['data_sizes']
         self.test_clients = data['test']['data_sizes'].keys()
+        self.args = args
    
         meta = data.get('meta', {}) if isinstance(data, dict) else {}
         dom_map = meta.get('domain_assignment', None)
@@ -138,7 +139,7 @@ class Server(object):
         self.results_dir.mkdir(parents=True, exist_ok=True)
         self.round_csv = self.results_dir / f"round_log_pov.csv"
         self.acc_time_png = self.results_dir / f"acc_vs_time_pov.png"
-        self.args.method="pow"
+        
         self.round_csv_path = self.results_dir / f"round_log_{self.args.method}.csv"
         # Cumulative time across rounds (for resumed runs we may overwrite below)
         self.cum_time = 0.0
@@ -150,7 +151,7 @@ class Server(object):
      
 
         self.device = args.device
-        self.args = args
+        
         self.global_model = init_model
         self.selection_method = selection
         self.federated_method = fed_algo
@@ -214,7 +215,7 @@ class Server(object):
           ckpt_dir = getattr(self.args, "ckpt_dir", "/kaggle/working/testhhh/checkpoints")
           os.makedirs(ckpt_dir, exist_ok=True)
 
-          filename = f"{self.args.method}_round_{round_completed}.pt"
+          filename = f"pow_round_{round_completed}.pt"
           ckpt_path = os.path.join(ckpt_dir, filename)
 
           payload = {
