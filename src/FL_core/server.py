@@ -517,8 +517,8 @@ class Server(object):
     )
     
       # Formatting
-      ax.set_xlabel('Client ID', fontsize=14, fontweight='bold')
-      ax.set_ylabel('Round', fontsize=14, fontweight='bold')
+      ax.set_ylabel('Client ID', fontsize=14, fontweight='bold')
+      ax.set_xlabel('Round', fontsize=14, fontweight='bold')
       ax.set_title(f'Prototype-based selection pattern — {title_suffix}', 
                  fontsize=16, fontweight='bold')
     
