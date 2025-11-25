@@ -523,9 +523,15 @@ class Server(object):
                  fontsize=16, fontweight='bold')
     
       # X-axis (clients)
-      ax.set_xticks(np.arange(N) + 0.5)
-      ax.set_xticklabels([f'Client {i}' for i in range(N)], 
+      #ax.set_xticks(np.arange(N) + 0.5)
+      #ax.set_xticklabels([f'Client {i}' for i in range(N)], 
                         rotation=45, ha='right', fontsize=8)
+
+
+      ax.set_yticks(np.arange(N) + 0.5)
+      ax.set_yticklabels([f'Client {i}' for i in range(N)], 
+                        rotation=45, ha='right', fontsize=8)
+    
     
       # Y-axis (rounds)
       if R > 50:
@@ -536,8 +542,8 @@ class Server(object):
         tick_interval = 1
     
       y_ticks = np.arange(0, R, tick_interval)
-      ax.set_yticks(y_ticks + 0.5)
-      ax.set_yticklabels([str(i) for i in y_ticks], fontsize=8)
+      ax.set_xticks(y_ticks + 0.5)
+      ax.set_xticklabels([str(i) for i in y_ticks], fontsize=8)
     
       plt.tight_layout()
       plt.savefig(png_path, dpi=300, bbox_inches='tight')
