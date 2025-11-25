@@ -296,77 +296,103 @@ class Server(object):
 
         print(f"[Participation] saved: {png_path}")
 
-    def _build_domain_centroids_from_valid(self, batch_size=None, max_batches=None):
+    def _compute_global_reference_prototypes(self, selected_client_ids, batch_size=None, max_batches=None):
       """
-      Build domain centroids = mean of client macro-prototypes per domain.
-      Uses each client's validation set (preferred) to be consistent with your analysis.
+      Compute global reference prototypes by averaging all selected clients' prototypes.
       """
-      if self.domain_map is None:
-        self.domain_centroids = None
-        return
+      if batch_size is None: 
+        batch_size = getattr(self.args, "batch_size", 64)
+      if max_batches is None: 
+        max_batches = self.proto_max_batches
 
-      if batch_size is None: batch_size = getattr(self.args, "batch_size", 64)
-      if max_batches is None: max_batches = self.proto_max_batches
-
-      dom2vecs = defaultdict(list)
-
-      # use the GLOBAL model to compute all prototypes (consistent space)
-      for client in self.client_list:
-        cid = client.client_idx
-        dom = int(self.domain_map[cid])
-        proto = client.proto_from_validation(self.global_model, self.device, batch_size=batch_size, max_batches=max_batches)
-        if proto is not None:
-            dom2vecs[dom].append(proto)
-
-      centroids = {}
-      for dom, vecs in dom2vecs.items():
-        centroids[dom] = np.stack(vecs, axis=0).mean(axis=0)  # np.array [D]
-      self.domain_centroids = centroids
-
-
-    @torch.no_grad()
-    def _log_selected_client_prototypes_from_valid(self, round_idx, selected_client_ids):
-      """
-      For selected clients this round, compute macro prototype (validation),
-      then assign to nearest domain centroid by cosine similarity.
-      """
-      # build centroids first (once early, or refresh occasionally if you want)
-      if self.domain_centroids is None or (round_idx == 0):
-        self._build_domain_centroids_from_valid()
-
-      assigns = {}
-      sims_all = {}
-
-      if not self.domain_centroids:  # None or empty
-        # log 'unknown' if no centroids available
-        for cid in selected_client_ids:
-            assigns[cid] = -1
-            sims_all[cid] = {}
-        self.proto_history.append({"round": round_idx, "assignments": assigns, "sims": sims_all})
-        return
-
+      all_prototypes = []
+    
       for cid in selected_client_ids:
         client = self.client_list[cid]
-        proto = client.proto_from_validation(self.global_model, self.device,
-                                             batch_size=getattr(self.args, "batch_size", 64),
-                                             max_batches=self.proto_max_batches)
+        proto = client.proto_from_validation(
+            self.global_model, 
+            self.device,
+            batch_size=batch_size, 
+            max_batches=max_batches
+        )
+        if proto is not None:
+            all_prototypes.append(proto)
+    
+      if not all_prototypes:
+        return None
+    
+      # Average all prototypes
+      reference_proto = np.stack(all_prototypes, axis=0).mean(axis=0)
+      return reference_proto
+
+
+    def _calculate_prototype_distance_score(self, client_proto, reference_proto):
+      """
+      Calculate Euclidean distance between client and reference prototypes.
+      """
+      if client_proto is None or reference_proto is None:
+        return 0.0
+    
+      distance = np.linalg.norm(client_proto - reference_proto)
+      return float(distance)
+
+
+    def _log_selected_client_prototype_scores(self, round_idx, selected_client_ids):
+      """
+      For selected clients, compute prototypes and calculate distance scores.
+      REPLACES: _log_selected_client_prototypes_from_valid()
+      """
+      batch_size = getattr(self.args, "batch_size", 64)
+      max_batches = self.proto_max_batches
+    
+      # Compute global reference
+      reference_proto = self._compute_global_reference_prototypes(
+        selected_client_ids, 
+        batch_size=batch_size, 
+        max_batches=max_batches
+    )
+    
+      scores = {}
+      prototypes = {}
+    
+      if reference_proto is None:
+        for cid in selected_client_ids:
+            scores[cid] = 0.0
+            prototypes[cid] = None
+        self.proto_history.append({
+            "round": round_idx, 
+            "scores": scores, 
+            "prototypes": prototypes
+        })
+        return
+    
+      # Calculate distance score for each client
+      for cid in selected_client_ids:
+        client = self.client_list[cid]
+        proto = client.proto_from_validation(
+            self.global_model, 
+            self.device,
+            batch_size=batch_size,
+            max_batches=max_batches
+        )
+        
         if proto is None:
-            assigns[cid] = -1
-            sims_all[cid] = {}
-            continue
-
-        best_dom, best_sim = None, -1.0
-        sims = {}
-        for dom, cen in self.domain_centroids.items():
-            s = cosine_sim(proto, cen)
-            sims[int(dom)] = s
-            if s > best_sim:
-                best_sim, best_dom = s, int(dom)
-        assigns[cid] = best_dom if best_dom is not None else -1
-        sims_all[cid] = sims
-
-      self.proto_history.append({"round": round_idx, "assignments": assigns, "sims": sims_all})
-
+            scores[cid] = 0.0
+            prototypes[cid] = None
+        else:
+            distance_score = self._calculate_prototype_distance_score(proto, reference_proto)
+            scores[cid] = distance_score
+            prototypes[cid] = proto
+    
+      self.proto_history.append({
+        "round": round_idx, 
+        "scores": scores, 
+        "prototypes": prototypes
+    })
+    
+      if scores:
+        avg_score = np.mean([s for s in scores.values() if s > 0])
+        print(f"[Proto] Round {round_idx}: Avg distance score = {avg_score:.4f}")
 
     def evaluate_on_client_validation(self, clients=None):
           """
@@ -438,62 +464,96 @@ class Server(object):
 
 
     #visualization clients participants
-    def save_proto_domain_heatmap(self, title_suffix="Pow-d (valid prototypes)"):
-      """
-      Heatmap: rows=rounds, cols=clients.
-      Cell = 0 if not selected; otherwise 1 + inferred_domain (from validation prototypes).
-      Also writes CSV with per-round inferred domain for each selected client.
-      """
+    def save_proto_score_heatmap(self, title_suffix="Pow-d (prototype scores)"):
+    
       out_dir = self.results_dir
       out_dir.mkdir(parents=True, exist_ok=True)
-      png_path = out_dir / f"proto_rounds_x_clients_pov.png"
-      csv_path = out_dir / f"proto_rounds_x_clients_pov.csv"
-
+      png_path = out_dir / f"proto_score_heatmap_{self.args.method}.png"
+      csv_path = out_dir / f"proto_scores_{self.args.method}.csv"
+    
       if not self.proto_history:
-        print("[ProtoHeatmap] No prototype history.")
+        print("[ProtoScoreHeatmap] No prototype history.")
         return
-
+    
+      # Build matrix: rounds x clients
       R = max(h["round"] for h in self.proto_history) + 1
       N = self.total_num_client
-      M = np.zeros((R, N), dtype=int)
+      M = np.zeros((R, N), dtype=float)
+    
+      # CSV records
       rows = []
-
+    
       for h in self.proto_history:
         r = int(h["round"])
-        assigns = h["assignments"]  # {cid: dom or -1}
-        for cid, dom in assigns.items():
-            if dom is None or dom < 0:
-                continue
-            M[r, int(cid)] = int(dom) + 1
-            rows.append({"round": r, "client_id": int(cid), "inferred_domain": int(dom)})
-
+        scores = h.get("scores", {})
+        
+        for cid, score in scores.items():
+            cid_int = int(cid)
+            M[r, cid_int] = float(score)
+            
+            if score > 0:
+                rows.append({
+                    "round": r, 
+                    "client_id": cid_int, 
+                    "prototype_distance": float(score)
+                })
+    
+      # Save CSV
       pd.DataFrame(rows).to_csv(csv_path, index=False)
-      print(f"[ProtoHeatmap/CSV] saved: {csv_path}")
-
-      # palette (0 = not selected)
-      K = max(1, int(M.max()))
-      palette = ["#ffffff", "#4e79a7", "#f28e2b", "#e15759", "#76b7b2",
-               "#59a14f", "#edc948", "#b07aa1", "#ff9da7", "#9c755f"]
-      cmap = ListedColormap(palette[:K+1])
-      bounds = list(range(0, K+2))
-      norm = BoundaryNorm(bounds, cmap.N)
-
-      plt.figure(figsize=(min(14, max(10, N*0.55)), min(12, max(6, R*0.12))))
-      im = plt.imshow(M, aspect="auto", cmap=cmap, norm=norm)
-      cbar = plt.colorbar(im, ticks=list(range(0, K+1)))
-      ticks = ["Not selected"] + [f"Proto-domain {i}" for i in range(1, K+1)]
-      cbar.ax.set_yticklabels(ticks)
-
-      plt.title(f"Per-round client selection (prototype-inferred domain) — {title_suffix}", pad=12)
-      plt.xlabel("Client ID"); plt.ylabel("Round")
-      plt.xticks(np.arange(N), [str(i) for i in range(N)], rotation=45, ha="right")
-      step = max(1, R // 20)
-      plt.yticks(np.arange(0, R, step), [str(i) for i in range(0, R, step)])
-
+      print(f"[ProtoScoreHeatmap/CSV] saved: {csv_path}")
+    
+      # Create heatmap
+      fig, ax = plt.subplots(figsize=(min(20, max(10, N*0.55)), 
+                                     min(12, max(6, R*0.12))))
+    
+      # Use viridis colormap (same as FedAvg)
+      sns.heatmap(
+        M, 
+        cmap='viridis',
+        cbar_kws={'label': 'Prototype distance (domain diversity)'},
+        ax=ax,
+        linewidths=0,
+        rasterized=True
+    )
+    
+      # Formatting
+      ax.set_xlabel('Client ID', fontsize=14, fontweight='bold')
+      ax.set_ylabel('Round', fontsize=14, fontweight='bold')
+      ax.set_title(f'Prototype-based selection pattern — {title_suffix}', 
+                 fontsize=16, fontweight='bold')
+    
+      # X-axis (clients)
+      ax.set_xticks(np.arange(N) + 0.5)
+      ax.set_xticklabels([f'Client {i}' for i in range(N)], 
+                        rotation=45, ha='right', fontsize=8)
+    
+      # Y-axis (rounds)
+      if R > 50:
+        tick_interval = R // 20
+      elif R > 20:
+        tick_interval = 5
+      else:
+        tick_interval = 1
+    
+      y_ticks = np.arange(0, R, tick_interval)
+      ax.set_yticks(y_ticks + 0.5)
+      ax.set_yticklabels([str(i) for i in y_ticks], fontsize=8)
+    
       plt.tight_layout()
-      plt.savefig(png_path, dpi=200)
+      plt.savefig(png_path, dpi=300, bbox_inches='tight')
       plt.close()
-      print(f"[ProtoHeatmap] saved: {png_path}")
+    
+      print(f"[ProtoScoreHeatmap] saved: {png_path}")
+    
+      # Print statistics
+      non_zero = M[M > 0]
+      if len(non_zero) > 0:
+        print(f"[ProtoScoreHeatmap] Score statistics:")
+        print(f"  - Min: {non_zero.min():.4f}")
+        print(f"  - Max: {non_zero.max():.4f}")
+        print(f"  - Mean: {non_zero.mean():.4f}")
+        print(f"  - Std: {non_zero.std():.4f}")
+
 
     def train(self,start_round: int = 0):
         """
@@ -592,8 +652,8 @@ class Server(object):
             self.global_model.load_state_dict(global_model_params)
             
             # after final selection is decided (the clients that will really train this round)
-            self._log_selected_client_prototypes_from_valid(round_idx, client_indices)
-
+            #self._log_selected_client_prototypes_from_valid(round_idx, client_indices)
+            self._log_selected_client_prototype_scores(round_idx, client_indices)
             
             ## TEST
             """
@@ -663,7 +723,8 @@ class Server(object):
         except Exception as e:
           print(f"[RoundLog] save failed: {e}")
 
-        self.save_proto_domain_heatmap(title_suffix=self.args.method)
+        #self.save_proto_domain_heatmap(title_suffix=self.args.method)
+        self.save_proto_score_heatmap(title_suffix=self.args.method)
 
         for k in self.files:
             if self.files[k] is not None:
