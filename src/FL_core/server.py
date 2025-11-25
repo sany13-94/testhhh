@@ -525,7 +525,6 @@ class Server(object):
       # X-axis (clients)
       #ax.set_xticks(np.arange(N) + 0.5)
       #ax.set_xticklabels([f'Client {i}' for i in range(N)], 
-                        rotation=45, ha='right', fontsize=8)
 
 
       ax.set_yticks(np.arange(N) + 0.5)
