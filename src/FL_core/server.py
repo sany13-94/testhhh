@@ -21,7 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
-
+import seaborn as sns
  # PATCH: evaluate global model on each client's validation set and average
     
 class FeatureExtractor(nn.Module):
