@@ -463,97 +463,89 @@ class Server(object):
             self.client_list.append(c)
 
 
-    #visualization clients participants
     def save_proto_score_heatmap(self, title_suffix="Pow-d (prototype scores)"):
-    
+
       out_dir = self.results_dir
       out_dir.mkdir(parents=True, exist_ok=True)
       png_path = out_dir / f"proto_score_heatmap_{self.args.method}.png"
       csv_path = out_dir / f"proto_scores_{self.args.method}.csv"
-    
+
       if not self.proto_history:
         print("[ProtoScoreHeatmap] No prototype history.")
         return
-    
-      # Build matrix: rounds x clients
+
+      # Matrix: rows = clients (N), columns = rounds (R)
       R = max(h["round"] for h in self.proto_history) + 1
       N = self.total_num_client
-      M = np.zeros((R, N), dtype=float)
-    
-      # CSV records
+      M = np.zeros((N, R), dtype=float)    # ← swapped dimensions (N x R)
+
       rows = []
-    
+
       for h in self.proto_history:
         r = int(h["round"])
         scores = h.get("scores", {})
-        
+
         for cid, score in scores.items():
             cid_int = int(cid)
-            M[r, cid_int] = float(score)
-            
+            M[cid_int, r] = float(score)  # ← row = client, col = round
+
             if score > 0:
                 rows.append({
-                    "round": r, 
-                    "client_id": cid_int, 
+                    "round": r,
+                    "client_id": cid_int,
                     "prototype_distance": float(score)
                 })
-    
-      # Save CSV
+
       pd.DataFrame(rows).to_csv(csv_path, index=False)
       print(f"[ProtoScoreHeatmap/CSV] saved: {csv_path}")
-    
-      # Create heatmap
-      fig, ax = plt.subplots(figsize=(min(20, max(10, N*0.55)), 
-                                     min(12, max(6, R*0.12))))
-    
-      # Use viridis colormap (same as FedAvg)
+
+      fig, ax = plt.subplots(
+        figsize=(min(20, max(10, R * 0.4)), min(12, max(6, N * 0.22)))
+    )
+
       sns.heatmap(
-        M, 
-        cmap='viridis',
-        cbar_kws={'label': 'Prototype distance (domain diversity)'},
+        M,
+        cmap="viridis",
+        cbar_kws={"label": "Prototype distance (domain diversity)"},
         ax=ax,
         linewidths=0,
         rasterized=True
     )
-    
-      # Formatting
-      ax.set_ylabel('Client ID', fontsize=14, fontweight='bold')
-      ax.set_xlabel('Round', fontsize=14, fontweight='bold')
-      ax.set_title(f'Prototype-based selection pattern — {title_suffix}', 
-                 fontsize=16, fontweight='bold')
-    
-      # X-axis (clients)
-      #ax.set_xticks(np.arange(N) + 0.5)
-      #ax.set_xticklabels([f'Client {i}' for i in range(N)], 
 
+      # Axis labels
+      ax.set_xlabel("Round", fontsize=14, fontweight="bold")
+      ax.set_ylabel("Client ID", fontsize=14, fontweight="bold")
+      ax.set_title(
+        f"Prototype-based selection pattern — {title_suffix}",
+        fontsize=16, fontweight="bold"
+    )
 
+      # Y-axis = clients
       ax.set_yticks(np.arange(N) + 0.5)
-      ax.set_yticklabels([f'Client {i}' for i in range(N)], 
-                        rotation=45, ha='right', fontsize=8)
-    
-    
-      # Y-axis (rounds)
+      ax.set_yticklabels([f"Client {i}" for i in range(N)],
+                       rotation=0, ha="right", fontsize=8)
+
+      # X-axis = rounds
       if R > 50:
         tick_interval = R // 20
       elif R > 20:
         tick_interval = 5
       else:
         tick_interval = 1
-    
-      y_ticks = np.arange(0, R, tick_interval)
-      ax.set_xticks(y_ticks + 0.5)
-      ax.set_xticklabels([str(i) for i in y_ticks], fontsize=8)
-    
+
+      x_ticks = np.arange(0, R, tick_interval)
+      ax.set_xticks(x_ticks + 0.5)
+      ax.set_xticklabels([str(i) for i in x_ticks], fontsize=8)
+
       plt.tight_layout()
-      plt.savefig(png_path, dpi=300, bbox_inches='tight')
+      plt.savefig(png_path, dpi=300, bbox_inches="tight")
       plt.close()
-    
+
       print(f"[ProtoScoreHeatmap] saved: {png_path}")
-    
-      # Print statistics
+
       non_zero = M[M > 0]
       if len(non_zero) > 0:
-        print(f"[ProtoScoreHeatmap] Score statistics:")
+        print("[ProtoScoreHeatmap] Score statistics:")
         print(f"  - Min: {non_zero.min():.4f}")
         print(f"  - Max: {non_zero.max():.4f}")
         print(f"  - Mean: {non_zero.mean():.4f}")
